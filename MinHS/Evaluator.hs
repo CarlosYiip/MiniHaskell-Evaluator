@@ -11,7 +11,7 @@ data Value = I Integer
            | B Bool
            | Nil
            | Cons Integer Value
-           | C VEnv String String Exp
+           | C VEnv String [String] Exp
            -- Others as needed
            deriving (Show)
 
@@ -29,36 +29,33 @@ evaluate bs = evalE E.empty (Let bs (Var "main"))
 
 evalE :: VEnv -> Exp -> Value
 
--- ints
+-- Ints
 evalE g (Num n) = I n
 
--- bools
+-- Bools
 evalE g (Con "True") = B True
 evalE g (Con "False") = B False
 
--- lists
+-- Lists
 evalE g (Con "Nil") = Nil
 evalE g (App (App (Con "Cons") e1) e2) = Cons n (evalE g e2)
   where
     I n = evalE g e1
 
--- list ops
-evalE g (App (Prim Head) (App (App (Con "Cons") e) _)) = I n
+evalE g (App (Prim Head) e) = I h
   where
-    I n = evalE g e
-  
-evalE g (App (Prim Tail) (App (App (Con "Cons") e) (Con "Nil"))) = I n
-  where
-    I n = evalE g e
+    Cons h _ = evalE g e
 
-evalE g (App (Prim Tail) (App (App (Con "Cons") _) e)) = evalE g e
+evalE g (App (Prim Tail) e) = t
+  where
+    Cons _ t = evalE g e
 
 evalE g (App (Prim Null) e) = case (evalE g e) of
   (Nil)     -> B True
   otherwise -> B False
 
 
--- primops + nestedExpr
+-- Primops + NestedExpr
 evalE g (App (App (Prim Gt) e1) e2) = B (m > n)
   where (I m) = evalE g e1
         (I n) = evalE g e2
@@ -106,62 +103,54 @@ evalE g (App (App (Prim Quot) e1) e2) = I (m `quot` n)
     (I m) = evalE g e1
     (I n) = evalE g e2
 
---  ifThenElse
+-- IfThenElse
 evalE g (If e1 e2 e3) = case (evalE g e1) of
   (B True)  -> evalE g e2
   otherwise -> evalE g e3
 
--- -- variables
+-- Variables
 evalE g (Var vname) = case E.lookup g vname of
   Just v  -> v
   Nothing -> error ("in evalE var: " ++ vname)
 
-
 -- Variable Bidings with Let
-evalE g (Let [Bind v_name _ _ e2] e1) = evalE g' e1
+-- evalE g (Let [Bind v_name _ _ e2] e1) = evalE g' e1
+--   where
+--     g' = E.add g (v_name, (evalE g e2))
+
+evalE g (Let bindings e1) = evalE g' e1
   where
-    g' = E.add g (v_name, (evalE g e2))
+    helper :: [Bind] -> [(String, Value)]
+    helper (b:bs)
+      | (length bs) > 0 = (vname, (evalE g e2)):(helper bs)
+      | otherwise       = [(vname, (evalE g e2))]
+        where
+          Bind vname _ _ e2 = b
+    pairs = helper bindings
+    g' = E.addAll g pairs
 
--- letFun
-evalE g (Letfun (Bind f_name _ [x] f_body)) = C g f_name x f_body
+-- LetFun
+evalE g (Letfun (Bind f_name _ [] (App (Prim op) e))) = C g f_name [""] (App (App (Prim op) e) (Var ""))
+
+evalE g (Letfun (Bind f_name t x (App e (Var vname))))
+ | (length x) > 1 = C g f_name [head x] (Letfun (Bind (f_name ++ "'") t (tail x) (App e (Var vname))))
 
 
+
+
+evalE g (Letfun (Bind f_name t x f_body))
+  | (null x) = v
+  | otherwise = C g f_name x f_body
+      where
+        v  = evalE g' f_body
+        g' = E.add g (f_name, v)
+
+-- Function application
 evalE g (App e1 e2) = evalE g'' f_body
   where
     C g' f_name x f_body = evalE g e1
     v   = evalE g e2
-    g'' = E.add g' (x, v)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    g'' = E.addAll g' [((head x), v), (f_name, C g' f_name x f_body)]
 
 
 
