@@ -118,7 +118,12 @@ evalE g (Var vname) = case E.lookup g vname of
 --   where
 --     g' = E.add g (v_name, (evalE g e2))
 
-evalE g (Let bindings e1) = evalE g' e1
+evalE g (Let ((Bind f_name t [x] f_body):bs) e1) = evalE g' e1
+  where
+    g' = E.add g (f_name, (C g' f_name [x] f_body))
+
+
+evalE g (Let ((Bind vname t [] e2):bs) e1) = evalE g' e1
   where
     helper :: [Bind] -> [(String, Value)]
     helper (b:bs)
@@ -126,9 +131,9 @@ evalE g (Let bindings e1) = evalE g' e1
       | otherwise       = [(vname, (evalE g e2))]
         where
           Bind vname _ _ e2 = b
-    pairs = helper bindings
+    pairs = helper ((Bind vname t [] e2):bs)
     g' = E.addAll g pairs
-
+-- 
 -- LetFun
 evalE g (Letfun (Bind f_name _ [] (App (Prim op) e))) = C g f_name [""] (App (App (Prim op) e) (Var ""))
 
