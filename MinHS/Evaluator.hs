@@ -113,16 +113,12 @@ evalE g (Var vname) = case E.lookup g vname of
   Just v  -> v
   Nothing -> error ("in evalE var: " ++ vname)
 
--- Variable Bidings with Let
--- evalE g (Let [Bind v_name _ _ e2] e1) = evalE g' e1
---   where
---     g' = E.add g (v_name, (evalE g e2))
-
+-- Task 5
 evalE g (Let ((Bind f_name t [x] f_body):bs) e1) = evalE g' e1
   where
     g' = E.add g (f_name, (C g' f_name [x] f_body))
 
-
+-- Task 4
 evalE g (Let ((Bind vname t [] e2):bs) e1) = evalE g' e1
   where
     helper :: [Bind] -> [(String, Value)]
@@ -133,16 +129,15 @@ evalE g (Let ((Bind vname t [] e2):bs) e1) = evalE g' e1
           Bind vname _ _ e2 = b
     pairs = helper ((Bind vname t [] e2):bs)
     g' = E.addAll g pairs
--- 
--- LetFun
+
+-- Task 2
 evalE g (Letfun (Bind f_name _ [] (App (Prim op) e))) = C g f_name [""] (App (App (Prim op) e) (Var ""))
 
+-- Task 3
 evalE g (Letfun (Bind f_name t x (App e (Var vname))))
  | (length x) > 1 = C g f_name [head x] (Letfun (Bind (f_name ++ "'") t (tail x) (App e (Var vname))))
 
-
-
-
+-- LetFun
 evalE g (Letfun (Bind f_name t x f_body))
   | (null x) = v
   | otherwise = C g f_name x f_body
@@ -156,6 +151,25 @@ evalE g (App e1 e2) = evalE g'' f_body
     C g' f_name x f_body = evalE g e1
     v   = evalE g e2
     g'' = E.addAll g' [((head x), v), (f_name, C g' f_name x f_body)]
+
+
+-- Task 6
+evalE g (Letrec b e) = evalE g' e
+  where
+    helper :: VEnv -> [Bind] -> [(String, Value)]
+    helper g_ ((Bind vname _ _ e_):bs)
+      | (length bs) > 0 = (vname, (evalE g_ e_)):helper g_' bs
+      | otherwise = [(vname, (evalE g_ e_))]
+        where
+          g_' = E.add g_ (vname, (evalE g_ e_))
+
+    pairs = helper g (reverse b)
+    g' = E.addAll g pairs
+
+
+
+
+
 
 
 
